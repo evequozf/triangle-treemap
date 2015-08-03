@@ -1,0 +1,6 @@
+
+*.png
+
+screenshots/*
+versioncontrol/*
+treemap.html
