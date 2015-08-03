@@ -29,7 +29,12 @@ path:hover {
 </style>
 <body>
 <h1>Triangle treemap</h1>
-
+<!--
+<form>
+  <label><input type="radio" name="mode" value="size" checked> Size</label>
+  <label><input type="radio" name="mode" value="count"> Count</label>
+</form>
+-->
 <svg></svg>
 
 <script src="./d3.v3.min.js"></script>
@@ -55,13 +60,14 @@ var partition = d3.layout.partition()
 var color = d3.scale.category10();
 
 function setColors(node,idx) {
-  if(typeof node.parent === 'undefined') {
+  if(node.depth === 0) {
+  	node.color = null;
     if(node.children != null) {
       node.children.forEach(function(n,i){setColors(n,idx)});
     }
   } else {
     var pc = node.parent.color;
-    if(typeof pc === 'undefined') { 
+    if(node.depth === 1) { 
       node.color = color(node.name); //first level after root -> fixed color
     } else {
       var c = d3.hsl(pc);//.brighter(0.4);
@@ -75,23 +81,35 @@ function setColors(node,idx) {
   }
 }
 
-// un triangle d'essai
-//isocèle
+// Container triangle
+// isocele
+
 var t = [
   {x: 0.8 * 0.5 * width, y: 0},
   {x: 0, y: 0.8 * height},
   {x: 0.8 * width, y: 0.8 * height}
 ];
 
-
-//rectangle
+// equilateral
 /*
+var a = height * 0.8,
+    h = 0.5 * Math.sqrt(3) * a;
+var t = [
+  {x: 0.5 * width, y: 0},
+  {x: 0.5 * ( width + a ), y: h},
+  {x: 0.5 * ( width - a ), y: h}
+];
+*/
+
+/*
+//rectangle
 var t = [
   {x: 0, y: 0.8*height},
   {x: 0, y: 0},
   {x: 0.8*width, y: 0.8*height}
 ];
 */
+
 
 // Visual - draw triangle as path
 
@@ -108,30 +126,44 @@ var triangle = function(t) {
          "Z";
 }
 
-
-
-////////////////////////////////////////////////
-
+/// Load data and display 
 var rt;
 d3.json("flare.json", function(error, root) {
   if (error) throw error;
 
-  nodes = partition.nodes(root);
-  //console.log(root);
-  rt = nodes[0];
-  setColors(nodes[0],0);
+
+  //nodes = partition.value(function(d) { return d.size; }).nodes(root);
+  //nodes = partition.nodes(root);
+  //rt = nodes[0];
+  //setColors(nodes[0],0);
 
   var start = new Date().getTime();
-  treemap(nodes[0], t, 0, true); // squarify
-  //treemap(nodes[0], t, 0, false); // don't squarify
 
+/////////////////////  
+  //treemap(nodes[0], t, true); // squarify
+  //treemap(nodes[0], t, false); // don't squarify
 /////////////////////
-  svg.selectAll("path")
-  	.data(nodes).enter()
+  
+  //nodes.forEach(function(n,i){ setColors(n,i) });
+
+
+
+ // var selection = svg.selectAll("path")
+ // 	.data(nodes).enter()
+   var selection = svg.datum(root).selectAll(".node")
+      .data(function(root) {
+      	var r = partition.nodes(root); 
+      	setColors(r[0],0); 
+      	treemap(r[0], t, true); 
+      	return r; 
+      })
+      .enter()
   	.append("path")
     	.attr("d", function(d) { return triangle(d.triangle); })
     	//.style("stroke-width", function(d) { return stroke(d.depth); })
     	.style("fill", function(d) { return d.color; })
+    	//.style("fill", function(d, i) { return (Math.random() > 0.5 ? "black" : "#ddd"); })
+    	//.style("fill", function(d, i) { return (i % 2 === 0 ? "black" : "white"); })
     	.attr("name", function(d) {
     		return ( 
     			d.name + 
@@ -140,22 +172,47 @@ d3.json("flare.json", function(error, root) {
     			" value "+d.value
     		);
     	});
+
 /////////////////////
   var end = new Date().getTime();
   var time = end - start;
   console.log('Execution time: ' + time + 'ms');
 
-  //tooltip
+  // tooltip
   var tt = ds.ttip();
   svg.selectAll("path")
     .on("mouseover", function(d,i) { tt.html(d3.select(this).node().getAttribute("name")).show(d,i,this); })
     .on("mouseout", tt.hide);
+
+
+
+//////////////
+// FIXME : dont work : why ? conflict between treemap and partition ?
+/*
+  d3.selectAll("input").on("change", function change() {
+    var value = this.value === "count"
+        ? function() { return 1; }
+        : function(d) { return d.size; };
+
+    selection
+      .data(function(root) {
+      	var r = partition.value(value).nodes(root); 
+      	treemap(r[0], t, true); 
+      	return r; 
+      })
+      .transition()
+        .duration(1500)
+        .attr("d", function(d) { return triangle(d.triangle); });
+  });
+*/
+
+
+
 });
 
 
 // TEST WITH FAKE DATA
 /*
-
 // des données réelles d'essai
 var buildK = function(k,v,c) {
   return {name: k, value: v, children: c}
@@ -191,9 +248,32 @@ var data =
         ]
       );
 
-var nn = partition.nodes(data);
+function fill(d, nochildren, depth) {
+	if(depth == 0) {
+		return buildK("d"+depth,1,null);
+	} else {
+		var val = 0;
+		d.children = new Array(nochildren);
+		for(var i=0; i<nochildren; i++) {
+			var n = buildK("d"+depth,1,null);
+			fill(n, nochildren, depth-1);
+			//console.log(n);
+			//console.log(d);
+			d.children[i] = n;
+			val += n.value;
+		}
+		d.value = val;
+	}
+}
+
+var data2 = buildK("d0",1,null);
+//fill(data2, 4, 5);
+fill(data2, 2, 4);
+
+
+var nn = partition.nodes(data2);
 setColors(nn[0],0);
-treemap(nn[0], t, 0);
+treemap(nn[0], t, true);
 svg.selectAll("path")
   	.data(nn).enter()
   	.append("path")
@@ -208,21 +288,13 @@ svg.selectAll("path")
     			" value "+d.value
     		);
     	});
-*/
-// zoom
-//Overlay for catching zoom events
-/*
-svg.append("rect")
-    .attr("class", "overlay")
-    .attr("width", width)
-    .attr("height", height)
-    .call(zoom);
-
-//set width according to zoom
-function zoomed() {
-  //svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
-  //svg.select("path").style("stroke-width", .5 / d3.event.scale + "px");
-}
+//debug
+d3.selectAll("path").each(
+	function(d){
+		console.log(
+			"value: "+d.value
+			+" surface: "+surface(d.triangle))
+	});
 */
 
 </script>
