@@ -1,5 +1,65 @@
-// Geom
+//////////////////////////////////////
+/*
 
+Generates a triangular treemap layout, on top of an existing d3.layout.partition object.
+The data given as argument to the treemap function should be a d3.layout.partition.
+
+In particular, the data should be organised as a tree, with 
+- value field = "weight" of a given leaf node or weight of the whole subtree if not leaf
+- children field = array of children nodes (subtree), null if leaf
+
+This function will create a new field, 'triangle', given the three points of
+this element in the triangular treemap layout :
+
+{
+  {x: ..., y: ...}
+  {x: ..., y: ...}
+  {x: ..., y: ...}
+}
+
+It can then be drawn as a path, using for example an helper function:
+
+// Returns d attribute of path for a triangle represented as 
+// [ {x: ..., y: ...}, {...}, {...} ]
+
+var triangle = function(t) {
+  return "M" + coord(t[0]) + " L"+ coord(t[1]) + " L"+ coord(t[2]) + "Z";
+}
+
+var coord = function(tt) {
+  return (tt.x + " " + tt.y);
+}
+
+///////////////
+Example usage:
+///////////////
+
+// Container: triangle isocele
+var t = [
+  {x: 0.8 * 0.5 * width, y: 0},
+  {x: 0, y: 0.8 * height},
+  {x: 0.8 * width, y: 0.8 * height}
+];
+
+// Data as a tree, on which partition can be applied 
+// Beware with fields names in this object ! They must not conflict with 
+// fields created by d3.partition, otherwise they will be replaced (e.g. 'value', 'depth', ...)
+var treedata = ...; 
+
+var nodes = d3.layout.partition().nodes(treedata);
+treemap(nodes[0], t, true);
+
+...
+
+*/
+// 
+// 
+// 
+// 
+//////////////////////////////////////
+
+
+// Geometry helper functions
 // square of distance between two points -> does not take sqrt, faster (if just comparison involved)
 var sqdist = function(a, b) {
   var xt = Math.pow( b.x - a.x, 2 ),
@@ -48,7 +108,7 @@ var sixteenSqSurface = function(t) {
 }
 */
 
-// surface of triangle using vector product formula, given coordinates of edges
+// Surface of triangle using vector product formula, given coordinates of edges
 // https://fr.wikipedia.org/wiki/Aire_d%27un_triangle#.C3.80_partir_des_coordonn.C3.A9es_des_sommets
 var surface = function(t) {
   var xa = t[0].x, xb = t[1].x, xc = t[2].x,
@@ -57,7 +117,7 @@ var surface = function(t) {
 }
 
 // Find splitting point of triangle using bisection method //TODO : Newton's ?
-// leave p0, p1 unchanged, look for suitable p2 such as surface(p0, p1, p2) = targetArea 
+// i.e. leave p0, p1 unchanged, look for suitable p2 such as surface(p0, p1, p2) = targetArea 
 var epsilon = 0.001;
 var split = function(p0, p1, p2a, p2b, targetArea) {
   if(sqdist(p2a,p2b) < epsilon * epsilon) { 
@@ -81,9 +141,8 @@ var f = function(p0, p1, p2, targetArea) {
 
 
 ///////////////////////////////////
-// TREEMAP FUNCTION (as layout function -> adds a 'triangle' field in the data)
-
-/// treemap in triangles using a slice and dice fashion
+// TREEMAP FUNCTION (as layout function -> adds a 'triangle' attribute in the current object)
+/// treemap in triangles using a slice and dice / squarify (trianglify?) fashion
 var treemap = function(data, trng, squarify) {
   
   if( typeof(squarify) === 'undefined' ) squarify = false;
@@ -115,7 +174,7 @@ var treemap = function(data, trng, squarify) {
       // 'Squarify'-like variant : split remaining triangle along biggest side
       // don't apply squarify on last child -> otherwise may not split correctly
       if ( (squarify) && (i != children.length - 1) ) {  
-        // what's the biggest side ? sqaure distance comparison
+        // what's the biggest side ? square distance comparison
         var t0d = sqdist(t[1], t[2]),
             t1d = sqdist(t[0], t[2]),
             t2d = sqdist(t[0], t[1]),
@@ -148,7 +207,7 @@ var treemap = function(data, trng, squarify) {
   }
 
   // insert new property to current data : current triangle 
-  // FIXME : outside ? should it be
+  // FIXME : do it outside ? should it be
   // just the return value of this function instead ?
   data.triangle = trng;
 
