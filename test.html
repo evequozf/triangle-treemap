@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+path {
+	fill: lightyellow;
+	stroke: white;
+	stroke-linecap: round;
+}
+
+path:hover {
+	stroke-width: 10px !important;
+	stroke: yellow;
+	stroke-opacity: 1;
+}
+
+.tooltip {
+	background-color: white;
+	border: 1px solid gray;
+	padding: 5px 10px;
+}
+
+</style>
+<body>
+<h1>Triangle treemap - fake data</h1>
+<form id="size">
+  <span>Sizing: </span>
+  <label><input type="radio" name="mode" value="size"> Size</label>
+  <label><input type="radio" name="mode" value="count" checked> Count</label>
+</form>
+
+<form id="squarify">
+  <span>Positioning: </span>
+  <label><input type="radio" name="mode" value="squarify"> 'Squarify'</label>
+  <label><input type="radio" name="mode" value="slice" checked> Slice and Dice</label>
+</form>
+<svg></svg>
+
+<script src="./d3.v3.min.js"></script>
+<script src="./colorbrewer.min.js"></script>
+<script src="./triangle-treemap.js"></script>
+<script>
+
+var margin = {top: 20, right: 20, bottom: 20, left: 20},
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var svg = d3.select("svg")
+    .attr("width", width).attr("height", height)
+    .append("g")
+        .attr("transform","translate("+margin.top+","+margin.left+")");
+
+var partition = d3.layout.partition();
+
+var color = d3.scale.category10();
+//var color = d3.scale.ordinal()
+//	.range(colorbrewer.Set1[9]);
+
+function setColors(node,idx) {
+  if(node.depth === 0) {
+  	node.color = null;  // root -> null color
+  } else if(node.depth === 1) { 
+  	node.color = color(node.name); //first level after root -> fixed color
+  } else {
+      var c = d3.hsl(node.parent.color);//.brighter(0.4);
+      var m = idx / node.parent.children.length;
+      node.color = d3.hsl(c.h, c.s * Math.pow(0.97, m) , c.l * 1.1).toString();
+  }
+  if(node.children) {
+      node.children.forEach(function(n,i){setColors(n,idx)});
+  }
+}
+
+// Container triangle
+// isocele
+var t = [
+  {x: 0.8 * 0.5 * width, y: 0},
+  {x: 0, y: 0.8 * height},
+  {x: 0.8 * width, y: 0.8 * height}
+];
+
+// equilateral
+/*
+var a = height * 0.8,
+    h = 0.5 * Math.sqrt(3) * a;
+var t = [
+  {x: 0.5 * width, y: 0},
+  {x: 0.5 * ( width + a ), y: h},
+  {x: 0.5 * ( width - a ), y: h}
+];
+*/
+
+/*
+//rectangle
+var t = [
+  {x: 0, y: 0.8*height},
+  {x: 0, y: 0},
+  {x: 0.8*width, y: 0.8*height}
+];
+*/
+
+// Returns d attribute of path for a triangle represented as 
+// [ {x: ..., y: ...}, {...}, {...} ]
+var triangle = function(t) {
+  return "M" + coord(t[0]) + " L"+ coord(t[1]) + " L"+ coord(t[2]) + "Z";
+}
+
+// returns coordinates as string (helper function in triangle)
+var coord = function(tt) {
+  return (tt.x + " " + tt.y);
+}
+
+// Key function for use in data() for object constancy
+var key = function(d) {
+	return d.name + d.depth; // it seems d.name alone is not unique
+}
+
+// Controls default values
+var size = function() { return 1;};
+var squarify = true;
+
+
+// TEST WITH FAKE DATA
+var uid = 0;
+var setUid = function() {
+  return "-" + (uid++);
+}
+
+var buildNode = function(k,v,c) {
+  return {
+    name: k + setUid(), 
+    size: v, 
+    children: c
+  }
+}
+
+// regular fill: builds a tree of data of regular depth and number of children 
+function fill(nochildren, depth) {
+  var me;
+  if(depth == 0) {
+    me = buildNode("d"+depth, Math.ceil(Math.random() * 5), null); // random size for leaves
+  } else {
+    me = buildNode("d"+depth, 0, new Array(nochildren));
+    for(var i=0; i<nochildren; i++) {
+      var n = fill(nochildren, depth-1);
+      me.children[i] = n;
+      me.size += n.size;
+    }
+  }
+  return me;
+}
+
+// randomize number of children between minc and maxc
+function randomfill(minc, maxc, depth) {
+  var me;
+  if(depth == 0) {
+    me = buildNode("d"+depth, Math.ceil(Math.random() * 5), null);
+  } else {
+    var c = Math.ceil(minc + Math.random() * (maxc-minc));
+    me = buildNode("d"+depth, 0, new Array(c));
+    for(var i=0; i < c; i++) {
+      var n = randomfill(minc, maxc, depth-1);
+      me.children[i] = n;
+      me.size += n.size;
+    }
+  }
+  return me;
+}
+
+//var data2 = fill(4, 5);
+//var data2 = fill(3, 7);
+var data2 = randomfill(4, 2, 4);
+//var data2 = randomfill(3, 2, 6);
+
+init();
+
+function init() {
+  svg.selectAll(".node").remove();
+  svg.datum(data2).selectAll(".node")
+      .data(function(r) {
+        var nn = partition.value(size).nodes(r);
+        setColors(nn[0],0);
+        treemap(nn[0], t, squarify);
+        return nn; }
+        , key)
+      .enter().append("path")
+        .attr("class","node")
+        .style("fill", function(d) { return d.color; })
+        //.style("fill", function(d, i) { return (Math.random() > 0.5 ? "black" : "#ddd"); })
+        //.style("fill", function(d, i) { return (i % 2 === 0 ? "black" : "white"); })
+        .call(updateVariableAttrs);
+}
+
+function updateVariableAttrs() {
+  this
+    .attr("d", function(d) { return triangle(d.triangle); })
+    .attr("title", function(d){
+      var N = '\n';
+      var s = d.name + N 
+          + "lvl " + d.depth + N 
+          + "surface " + surface(d.triangle) + N
+          + "value "+d.value
+      return s;
+    });
+}
+
+//debug
+/*
+d3.selectAll("path").each(
+function(d){
+  console.log(
+    "value: "+d.value
+    +" surface: "+surface(d.triangle))
+});
+*/
+
+// Controls 
+function update() {
+	svg.selectAll(".node")
+		.data(function(root) {
+	      	var r = partition.value(size).nodes(root); 
+	      	treemap(r[0], t, squarify);
+	      	return r; 
+	  }, key)
+	  .transition()
+	    .duration(1500)
+	    .call(updateVariableAttrs);
+}
+
+d3.selectAll("#size input").on("change", function change() {
+	size = this.value === "count"
+	    ? function() { return 1; }
+	    : function(d) { return d.size; };
+	update();
+});
+
+d3.selectAll("#squarify input").on("change", function change() {
+	squarify = ( this.value === "squarify" );
+	update();
+});
+</script>
+</body>
+</html>
